@@ -1,4 +1,5 @@
 import { ViroMaterials, ViroNode, ViroPolyline, ViroQuad } from "@reactvision/react-viro";
+import { ViroRotation, ViroScale } from "@reactvision/react-viro/dist/components/Types/ViroUtils";
 import { AnimationsNameInDogFile, Dog } from "./models";
 import { Vector3 } from "@math.gl/core";
 import {
@@ -26,10 +27,17 @@ ViroMaterials.createMaterials({
 });
 
 const animationForGait: Record<Gait, AnimationsNameInDogFile> = {
-  standing: "Breathing",
-  walking: "Walking01",
-  running: "Running",
+  standing: "Idle",
+  walking: "Walk",
+  running: "Gallop",
 };
+
+// The model is about 4 units long from nose to tail; this makes it a small dog of about 0.6 m.
+const dogScale: ViroScale = [0.15, 0.15, 0.15];
+// The model faces +z, while the guide walks towards its -z.
+const dogRotationDegrees: ViroRotation = [0, 180, 0];
+// The neck joint of the scaled and rotated model, relative to the guide's position on the ground.
+const collarInGuideSpace = new Vector3(0, 0.32, -0.15);
 
 export function DogNavigator(props: { guide: NavigationGuideState; camera: Transform }): React.ReactElement {
   const { guide, camera } = props;
@@ -41,7 +49,7 @@ export function DogNavigator(props: { guide: NavigationGuideState; camera: Trans
   const camForward = camVectors.forward();
 
   const leashStartPoint = camPos.clone().addScaledVector(camUp, -0.1).addScaledVector(camRight, 0.05);
-  const leashTargetPoint = guide.position.clone().add(new Vector3(0, 0.15, -0.2).transformByQuaternion(guide.rotation));
+  const leashTargetPoint = guide.position.clone().add(collarInGuideSpace.clone().transformByQuaternion(guide.rotation));
 
   const leashStartMidPoint = camPos.clone().addScaledVector(camForward, 0.8);
   const leashEndMidPoint = lerpVector3(leashTargetPoint, withY(camPos, leashTargetPoint.y), 0.5);
@@ -66,7 +74,7 @@ export function DogNavigator(props: { guide: NavigationGuideState; camera: Trans
   return (
     <>
       <ViroNode position={asNum3(guide.position)} rotation={quaternionToViroRotation(guide.rotation)}>
-        <Dog rotation={[90, 180, 0]} animation={{ name: animationName, interruptible }} />
+        <Dog rotation={dogRotationDegrees} scale={dogScale} animation={{ name: animationName, interruptible }} />
       </ViroNode>
 
       <ViroQuad position={asNum3(guide.position)} rotation={[-90, 0, 0]} arShadowReceiver={true}></ViroQuad>

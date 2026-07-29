@@ -1,9 +1,12 @@
-﻿The guide dog model is not part of this repository. To build the app, add these files to this folder:
+﻿# Dog model
 
-- `RGB.png`, `1_normal.png` and `1_smoothness.png` from the free Unity Asset Store package
-  [3D Stylized Animated Dogs Kit](https://assetstore.unity.com/packages/3d/characters/animals/mammals/3d-stylized-animated-dogs-kit-284699)
-- `pug.vrx`, converted from `pug.fbx` of the same package with Viro's converter, which runs only on macOS:
+`shiba-inu.glb` is the "ShibaInu" of Quaternius'
+[Ultimate Animated Animal Pack](https://quaternius.com/packs/ultimateanimatedanimals.html) (CC0, see
+[ASSET_SOURCES.md](../ASSET_SOURCES.md)).
+The app uses its animations `Idle`, `Walk` and `Gallop`.
 
-```bash
-node_modules/@reactvision/react-viro/bin/ViroFBX pug.fbx pug.vrx
-```
+To regenerate it:
+
+1. Download `glTF/ShibaInu.gltf` from the pack.
+2. Repackage it as GLB without changes: `npx @gltf-transform/cli copy ShibaInu.gltf ../../../assets-src/dog/shiba-inu.glb`
+3. Optimize it into this folder: `npm run gen-glb` (in `sdk/`)

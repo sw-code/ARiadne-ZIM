@@ -42,8 +42,12 @@ Therefore, we added a script to fix it, which will automatically be run when you
 - `npm run type-check` - TypeScript type checking
 - `npm run lint` - ESLint code quality check (you should run this before opening a pull request)
 - `npm run format` - Perform code formatting (you should run this before opening a pull request)
+- `npm run gen-glb` - Optimize the GLB models in `assets-src/` into `assets/3d/`
 
 We recommend configuring your editor to perform this formatting on every file save.
+
+New 3D models and sounds must allow redistribution in a public source repository (CC0, CC BY 4.0 or self-made).
+Record their source and license in [assets/3d/ASSET_SOURCES.md](assets/3d/ASSET_SOURCES.md).
 
 # The stack (the configs)
 

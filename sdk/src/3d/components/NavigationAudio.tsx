@@ -5,9 +5,9 @@ import { AbsoluteTime, useTimeInterval } from "@/src/shared/ReactExtensions";
 import { log } from "@/src/shared/Logger";
 import { navigationSoundFor, NavigationSound } from "@/src/3d/navigation";
 
-const barkingSound = require("@assets/3d/sounds/mixkit-dog-barking-twice-1.wav");
-const wrongDirectionSound = require("@assets/3d/sounds/mixkit-click-error-1110.wav");
-const dangerSound = require("@assets/3d/sounds/mixkit-battleship-alarm-1001.wav");
+const barkingSound = require("@assets/3d/sounds/dog-barking-twice.wav");
+const wrongDirectionSound = require("@assets/3d/sounds/error-click.wav");
+const dangerSound = require("@assets/3d/sounds/alarm-whoop.wav");
 
 export type NavigationAudioMode = "correct direction" | "wrong direction" | "danger";
 

@@ -44,6 +44,8 @@ async function processFile(input: string, output: string) {
     textureCompress({
       targetFormat: "jpeg",
       resize: [1024, 1024],
+      // palette() textures hold the exact material colors, which JPEG chroma subsampling would visibly shift
+      pattern: /^(?!Palette)/,
     }),
     prune(),
   );
