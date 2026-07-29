@@ -72,6 +72,18 @@ test("an import at exactly the plausible share still marks places gone", async (
   expect(result).toEqual({ importedPlaceCount: 5, newlyGonePlaceCount: 5, goneMarkingSkipped: false });
 });
 
+test("leaving out the 35 Stolpersteine of Soest's 1,738 places is plausible and marks them gone", async () => {
+  const fetchPlaces = vi.fn<() => Promise<ImportedPlace[]>>();
+  const importPlaces = createPlaceImporter(db(), fetchPlaces, clockReading(firstImportAt, secondImportAt));
+  fetchPlaces.mockResolvedValueOnce(placesNumbered(1_738));
+  await importPlaces();
+
+  fetchPlaces.mockResolvedValueOnce(placesNumbered(1_738 - 35));
+  const result = await importPlaces();
+
+  expect(result).toEqual({ importedPlaceCount: 1_703, newlyGonePlaceCount: 35, goneMarkingSkipped: false });
+});
+
 test("a failing fetch changes nothing and rejects", async () => {
   const fetchPlaces = vi.fn<() => Promise<ImportedPlace[]>>();
   const importPlaces = createPlaceImporter(db(), fetchPlaces, clockReading(firstImportAt, secondImportAt));

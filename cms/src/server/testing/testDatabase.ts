@@ -12,7 +12,7 @@ export function useTestDatabase(): () => Database {
 
   beforeAll(() => migrateDatabase(connection.db));
   beforeEach(async () => {
-    await connection.db.execute("truncate annotations, places");
+    await connection.db.execute("truncate annotations, places, walk_reports");
   });
   afterAll(() => connection.close());
 

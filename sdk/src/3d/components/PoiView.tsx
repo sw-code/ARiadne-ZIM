@@ -2,29 +2,30 @@ import { GeoCoordinate } from "@/src/shared/GeoLocation";
 import { Vector3 } from "@math.gl/core";
 import { PointOfInterest } from "@/src/shared/poi";
 import { Viro3DObject, ViroBox, ViroMaterials, ViroNode, ViroQuad, ViroText } from "@reactvision/react-viro";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { asNum3, withY } from "@/src/3d/math3d";
-import { degreesToRadians } from "@/src/shared/math";
 import { AbsoluteTime, useTimeEffect } from "@/src/shared/ReactExtensions";
-import { useUserProfile } from "@/src/shared/UserProfileProvider";
+import {
+  gazeSignalsAt,
+  gazeTargetOfPanel,
+  initialGazeEncounter,
+  nextGazeEncounter,
+  panelCentreHeightMetres,
+  panelScaleAtDistance,
+} from "@/src/3d/gazeEncounter";
+import { WalkEncounters } from "@/src/3d/walkEncounters";
 
 type PoiViewProps = {
   poi: PointOfInterest;
   northUser: Vector3;
   cameraForward: Vector3; // in north space, so it matches the POI's coordinate space
+  userVelocity: Vector3; // in north space, like cameraForward
   time: AbsoluteTime;
   geoToLocal: (c: GeoCoordinate) => Vector3;
   groundY: number;
+  encounters: WalkEncounters;
+  onSelected: (poi: PointOfInterest) => void;
 };
-
-// A POI counts as "gazed at" while it is within this cone of the camera forward and this close.
-// The accumulated dwell time is flushed into the profile on the given interval so we do not write
-// to the profile context on every frame.
-const gazeConeHalfAngleDegrees = 40;
-const gazeMaxDistanceMetres = 10;
-const gazeTargetHeightMetres = 1.6; // aim at the label, roughly eye level, so the cone stays horizontal
-const dwellFlushIntervalSeconds = 1;
-const gazeAlignmentThreshold = Math.cos(degreesToRadians(gazeConeHalfAngleDegrees));
 
 const textColor = "#444";
 
@@ -39,45 +40,45 @@ ViroMaterials.createMaterials({
   },
 });
 
-export function PoiView({ poi, geoToLocal, northUser, cameraForward, time, groundY }: PoiViewProps) {
+export function PoiView({
+  poi,
+  geoToLocal,
+  northUser,
+  cameraForward,
+  userVelocity,
+  time,
+  groundY,
+  encounters,
+  onSelected,
+}: PoiViewProps) {
   const poiCoord = useMemo(
     () => withY(geoToLocal(poi.location.coordinate), groundY),
     [geoToLocal, poi.location.coordinate, groundY],
   );
 
-  const profile = useUserProfile();
-
-  // Self-learning: grow this subtype's priority for as long as the user looks at it. Accumulated
-  // in refs and flushed on an interval to avoid a profile write every frame.
-  const dwellSeconds = useRef(0);
-  const secondsSinceFlush = useRef(0);
-
-  useEffect(() => {
-    return () => {
-      if (dwellSeconds.current > 0) profile.addDwellSeconds(poi.subtype, dwellSeconds.current);
-    };
-  }, [profile, poi.subtype]);
-
-  useTimeEffect(time, (deltaTime) => {
-    const toTarget = withY(poiCoord, groundY + gazeTargetHeightMetres).subtract(northUser);
-    const distance = toTarget.len();
-    const alignment = distance > 0.001 ? cameraForward.dot(toTarget) / distance : -1;
-    const isGazedAt = distance <= gazeMaxDistanceMetres && alignment > gazeAlignmentThreshold;
-
-    if (isGazedAt) dwellSeconds.current += deltaTime.seconds;
-
-    secondsSinceFlush.current += deltaTime.seconds;
-    if (secondsSinceFlush.current >= dwellFlushIntervalSeconds) {
-      secondsSinceFlush.current = 0;
-      if (dwellSeconds.current > 0) {
-        profile.addDwellSeconds(poi.subtype, dwellSeconds.current);
-        dwellSeconds.current = 0;
-      }
-    }
-  });
+  // A ref, not state: nothing is drawn from it, so re-rendering on every gaze update would be wasted work.
+  const gazeEncounter = useRef(initialGazeEncounter);
 
   const distance = northUser.distanceTo(poiCoord);
-  const scale = 1 + distance * 0.1;
+  const scale = panelScaleAtDistance(distance);
+
+  useTimeEffect(time, (deltaTime) => {
+    const toPlace = gazeTargetOfPanel(poiCoord, scale).subtract(northUser);
+
+    const previous = gazeEncounter.current;
+    const signals = gazeSignalsAt(toPlace, cameraForward, userVelocity);
+    const next = nextGazeEncounter(previous, signals, deltaTime.seconds);
+    gazeEncounter.current = next;
+
+    if (next.hasBeenShown && !previous.hasBeenShown) encounters.shown(poi);
+    if (next.hasEngaged && !previous.hasEngaged) encounters.engaged(poi);
+  });
+
+  // Tapping the panel is a clear sign of interest, however briefly the place was looked at.
+  const handlePanelClick = () => {
+    encounters.engaged(poi);
+    onSelected(poi);
+  };
 
   if (distance > 1000) return null;
 
@@ -95,8 +96,17 @@ export function PoiView({ poi, geoToLocal, northUser, cameraForward, time, groun
       {model}
 
       {poi.info && (
-        <ViroNode position={asNum3(poiCoord)} scale={[scale, scale, scale]} transformBehaviors={["billboardY"]}>
-          <ViroBox position={[0, 1.7, -0.1]} scale={[2.4, 1.5, 0.01]} materials={["textBackground"]} />
+        <ViroNode
+          position={asNum3(poiCoord)}
+          scale={[scale, scale, scale]}
+          transformBehaviors={["billboardY"]}
+          onClick={handlePanelClick}
+        >
+          <ViroBox
+            position={[0, panelCentreHeightMetres, -0.1]}
+            scale={[2.4, 1.5, 0.01]}
+            materials={["textBackground"]}
+          />
           <ViroText position={[0, 2, 0]} text={poi.info.name} style={{ fontSize: 30 }} width={2} color={textColor} />
           <ViroText
             position={[0, 1.6, 0]}

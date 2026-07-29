@@ -56,8 +56,9 @@ import { Anchors, UntypedViroArNavigator } from "@/src/shared/Viro";
 import { Vector3 } from "@math.gl/core";
 import { findMinimumBy } from "@/src/shared/JavascriptExtensions";
 import { Street } from "@/App";
-import { PointOfInterest } from "@/src/shared/poi";
+import { PointOfInterest, withPinnedPointOfInterest } from "@/src/shared/poi";
 import { PoiView } from "@/src/3d/components/PoiView";
+import { WalkEncounters } from "@/src/3d/walkEncounters";
 import { DogNavigator } from "@/src/3d/components/DogNavigator";
 import { measureGuidePace, useNavigationGuide } from "@/src/3d/components/NavigationGuide";
 import { useNavigationAudio, NavigationAudioMode } from "@/src/3d/components/NavigationAudio";
@@ -73,6 +74,8 @@ export type NavigationProps = {
   onStatsChanged: (stats: Stats) => void;
   onDangerStatusChanged: (status: DangerMetrics) => void;
   navigator: "dog" | "line";
+  encounters: WalkEncounters;
+  onPlaceSelected: (poi: PointOfInterest) => void;
 };
 
 export type SceneProps = {
@@ -81,6 +84,7 @@ export type SceneProps = {
   anchors: Anchors;
   vision: SceneVision;
   pois: PointOfInterest[];
+  via: PointOfInterest | null;
 };
 
 export type DeviceProps = {
@@ -135,6 +139,8 @@ export function Navigation({
   onDangerStatusChanged,
   geoInfo,
   navigator,
+  encounters,
+  onPlaceSelected,
 }: NavigationProps) {
   useRenderRateLog("Navigation");
   const userPosition = arrayToVector3(device.camera.viroTransform.position);
@@ -182,19 +188,23 @@ export function Navigation({
     return new IndexedPoints(northPois);
   }, [northPois]);
 
-  // Only the nearest POIs are shown for now. The interest profile still learns from dwell time
-  // (see PoiView) so it can take over the selection again later.
+  // Only the nearest POIs are shown for now. The interest profile still learns from the places that are
+  // shown and looked at (see PoiView) so it can take over the selection again later.
   const visiblePois = useMemo(
     () =>
-      indexedNorthPois
-        ?.findClosestPoints(north.cameraPosition, maxRenderedPois, maxPoiDistanceMetres)
-        .map((pointIndex) => scene.pois[pointIndex]!) ?? [],
-    [indexedNorthPois, north.cameraPosition, scene.pois],
+      withPinnedPointOfInterest(
+        indexedNorthPois
+          ?.findClosestPoints(north.cameraPosition, maxRenderedPois, maxPoiDistanceMetres)
+          .map((pointIndex) => scene.pois[pointIndex]!) ?? [],
+        scene.via,
+      ),
+    [indexedNorthPois, north.cameraPosition, scene.pois, scene.via],
   );
 
-  // Camera forward in north space, so each PoiView can decide whether it is being gazed at (and
-  // grow its subtype's priority) using the same coordinate space its position lives in.
+  // Camera forward and velocity in north space, so each PoiView can decide whether it is on screen or being looked
+  // at (and count as engaged) using the same coordinate space its position lives in.
   const cameraForwardNorth = transformedVector3D(north.worldToNorthSpace, unitVectors(device.camera).forward());
+  const userVelocityNorth = transformedVector3D(north.worldToNorthSpace, userVelocity);
 
   const northStreets = useMemo(() => {
     return geoInfo.allStreets.map((street) => ({
@@ -431,7 +441,10 @@ export function Navigation({
           poi={poi}
           northUser={north.cameraPosition}
           cameraForward={cameraForwardNorth}
+          userVelocity={userVelocityNorth}
           time={scene.time}
+          encounters={encounters}
+          onSelected={onPlaceSelected}
         />
       ))}
     </>

@@ -1,12 +1,11 @@
 import { snakeCaseToHeadingCase } from "@/src/shared/JavascriptExtensions";
 
 // OSM has no closed enumeration of tag values, so this is a curated set of the most common POI
-// subtypes. The order is deliberate — it doubles as the default interest ranking: the profile
-// seeds both the sort priority and the shown dwell time from each subtype's position here, so the
-// initial Settings order is fully predictable. At the moment that profile is only shown in
-// Settings; it is not used to select which places the map and AR show. Commonly-visited leisure/food
-// types lead; niche and professional services trail. Subtypes seen at runtime but missing here are
-// added to the profile on first sight (see UserProfileProvider).
+// subtypes. The order is deliberate — it doubles as the default interest ranking: Settings lists the
+// subtypes in this order until the user's own counts and choices reorder them, and the CMS mirrors the
+// list as the assumption it ranks places by before the user's behaviour outweighs it. Commonly-visited
+// leisure/food types lead; niche and professional services trail. Subtypes seen at runtime but missing
+// here are listed after these as soon as the profile counts them (see UserProfileProvider).
 export const commonPointOfInterestSubtypeList = [
   // food, drink & social
   "restaurant",
@@ -141,4 +140,31 @@ export function labelOfPointOfInterestSubtype(
   labels: Record<CommonPointOfInterestSubtype, string>,
 ): string {
   return isCommonPointOfInterestSubtype(subtype) ? labels[subtype] : snakeCaseToHeadingCase(subtype);
+}
+
+const sensitiveCategory = "healthcare";
+
+// Mirrors `isSensitive` and its lists in cms/src/server/profile/sensitiveSubtypes.ts. Health and religion
+// are special categories of personal data (GDPR Art. 9): interest in these places reveals more about a
+// person than the app may collect, so they are never counted, reported or profiled.
+const sensitiveSubtypes: ReadonlySet<string> = new Set([
+  "hospital",
+  "clinic",
+  "doctors",
+  "dentist",
+  "pharmacy",
+  "physiotherapist",
+  "psychotherapist",
+  "rehabilitation",
+  "alternative",
+  "laboratory",
+  "place_of_worship",
+]);
+
+export function isSensitiveSubtype(subtype: string): boolean {
+  return sensitiveSubtypes.has(subtype);
+}
+
+export function isSensitive({ category, subtype }: { category: string; subtype: string }): boolean {
+  return category === sensitiveCategory || isSensitiveSubtype(subtype);
 }

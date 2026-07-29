@@ -1,26 +1,39 @@
 import { serveStatic } from "@hono/node-server/serve-static";
 import { zValidator } from "@hono/zod-validator";
-import { Hono, type MiddlewareHandler } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { basicAuth } from "hono/basic-auth";
+import { bodyLimit } from "hono/body-limit";
+import { DatabaseError } from "pg";
+import type { ZodType } from "zod";
 import type { ApiErrorBody, ImportResult } from "../shared/api.ts";
 import { todayInSoest } from "../shared/annotationState.ts";
 import { annotationInputSchema, isAnnotationId } from "./annotations/annotationInputSchema.ts";
 import {
   createAnnotation,
   deleteAnnotation,
-  listAnnotatedPois,
   listAnnotations,
+  listPoisWithActiveAnnotations,
   placeExists,
   updateAnnotation,
 } from "./annotations/annotationRepository.ts";
 import type { Database } from "./database/connection.ts";
 import { listPlaces } from "./places/placeRepository.ts";
+import type { PriorModel } from "./profile/interest.ts";
+import { rankPois } from "./profile/ranking.ts";
+import { rankingRequestSchema } from "./profile/rankingRequestSchema.ts";
+import {
+  countWalkReportsReceivedToday,
+  deleteWalkReportsOf,
+  insertWalkReport,
+} from "./walkReports/walkReportRepository.ts";
+import { isInstallId, walkReportSchema } from "./walkReports/walkReportSchema.ts";
 
 export type AppDependencies = {
   db: Database;
   editorPassword: string;
   importPlaces: () => Promise<ImportResult>;
   now: () => Date;
+  priorModel: () => PriorModel;
   uiDistPath: string;
 };
 
@@ -35,15 +48,85 @@ const revalidateEntryPage: MiddlewareHandler = async (c, next) => {
   if (c.res.headers.get("Content-Type")?.startsWith("text/html")) c.header("Cache-Control", "no-cache");
 };
 
-const annotationBody = zValidator("json", annotationInputSchema, (result, c) => {
-  if (!result.success) return c.json(errorBody(...result.error.issues.map((issue) => issue.message)), 400);
+const validJsonBody = <Schema extends ZodType>(schema: Schema) =>
+  zValidator("json", schema, (result, c) => {
+    if (!result.success) return c.json(errorBody(...result.error.issues.map((issue) => issue.message)), 400);
+  });
+
+const annotationBody = validJsonBody(annotationInputSchema);
+
+function postgresErrorCodeOf(error: unknown): string | null {
+  const databaseError = error instanceof Error ? error.cause : null;
+  return databaseError instanceof DatabaseError ? (databaseError.code ?? null) : null;
+}
+
+// The public routes carry the user's interests. Hono's default error handler prints the whole error, and drizzle's
+// query errors hold the query's parameters in their message, so a failing query would write the request into the log.
+// The marker names the route and Postgres' error code only.
+async function answeringFailuresWithoutLoggingContent(
+  c: Context,
+  route: string,
+  respond: () => Promise<Response>,
+): Promise<Response> {
+  try {
+    return await respond();
+  } catch (error) {
+    console.error(`[${route}] request failed`, { postgresErrorCode: postgresErrorCodeOf(error) });
+    return c.json(errorBody("Internal server error"), 500);
+  }
+}
+
+// Public POST routes are open to anyone, so their bodies are capped well above what the app sends (a profile of
+// 500 subtypes is about 30 KiB).
+const maxPublicRequestBodyBytes = 64 * 1024;
+const limitedPublicBody = bodyLimit({
+  maxSize: maxPublicRequestBodyBytes,
+  onError: (c) => c.json(errorBody("Request body too large"), 413),
 });
 
-export function createApp({ db, editorPassword, importPlaces, now, uiDistPath }: AppDependencies): Hono {
+// The walk-report route is anonymous. The cap bounds how fast a scripted flood can fill the database, far above the
+// few dozen walks a day of real use. The count and the insert are separate statements, so concurrent requests can
+// overshoot the cap by a few, which does not matter for a bound.
+const maxWalkReportsPerDay = 1_000;
+
+export function createApp({ db, editorPassword, importPlaces, now, priorModel, uiDistPath }: AppDependencies): Hono {
   const app = new Hono();
 
   app.get("/healthz", (c) => c.text("ok"));
-  app.get("/api/annotated-pois", async (c) => c.json(await listAnnotatedPois(db, todayInSoest(now()))));
+
+  // The demo APKs installed before the ranked feed ask for this. Remove it once the new APK is rolled out.
+  app.get("/api/annotated-pois", async (c) => {
+    const pois = await listPoisWithActiveAnnotations(db, todayInSoest(now()));
+    return c.json(pois.filter(({ annotations }) => annotations.length > 0));
+  });
+
+  app.post("/api/pois/ranked", limitedPublicBody, validJsonBody(rankingRequestSchema), (c) =>
+    answeringFailuresWithoutLoggingContent(c, "POST /api/pois/ranked", async () => {
+      const pois = await listPoisWithActiveAnnotations(db, todayInSoest(now()));
+      return c.json(rankPois(pois, c.req.valid("json"), priorModel()));
+    }),
+  );
+
+  app.post("/api/walk-reports", limitedPublicBody, validJsonBody(walkReportSchema), (c) =>
+    answeringFailuresWithoutLoggingContent(c, "POST /api/walk-reports", async () => {
+      if ((await countWalkReportsReceivedToday(db)) >= maxWalkReportsPerDay) {
+        console.warn("[POST /api/walk-reports] daily cap reached, report refused");
+        return c.json(errorBody("Too many requests"), 429);
+      }
+      await insertWalkReport(db, c.req.valid("json"));
+      return c.body(null, 201);
+    }),
+  );
+
+  // Erasure answers 204 whether or not reports existed: afterwards none remain, which is all the caller asked for.
+  // That includes an id that is no UUID, because no report can carry one.
+  app.delete("/api/walk-reports/:installId", (c) =>
+    answeringFailuresWithoutLoggingContent(c, "DELETE /api/walk-reports/:installId", async () => {
+      const installId = c.req.param("installId");
+      if (isInstallId(installId)) await deleteWalkReportsOf(db, installId);
+      return c.body(null, 204);
+    }),
+  );
 
   // Registration order is the access rule: every route registered below requires the editor password.
   app.use(basicAuth({ username: "redaktion", password: editorPassword, realm: "ARiadne CMS" }));

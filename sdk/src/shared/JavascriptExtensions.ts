@@ -21,6 +21,28 @@ export function waitSecondsAsync(seconds: number): Promise<void> {
   });
 }
 
+/// Rejects when the promise has not settled in time. The promise itself keeps running, as promises cannot be
+/// cancelled; this only stops waiting for it.
+export function withTimeout<T>(promise: Promise<T>, timeoutSeconds: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`Timed out after ${timeoutSeconds} s`)),
+      secondsToMillis(timeoutSeconds),
+    );
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function getJsonOrThrow(response: Response): Promise<any> {
   if (!response.ok) {
     const message = await response.text();
@@ -64,6 +86,17 @@ export function findMinimumBy<T>(array: T[], getProp: (elem: T) => number): T | 
   return minElem;
 }
 
+/// Pairs every element with the one after it, e.g. the points of a polyline with the segments between them.
+export function consecutivePairs<T>(array: T[]): [T, T][] {
+  return array.slice(0, -1).map((element, index) => [element, array[index + 1]!]);
+}
+
+/// The elements from the first one that satisfies the predicate on, or none if no element does.
+export function startingAtFirst<T>(array: T[], predicate: (element: T) => boolean): T[] {
+  const firstIndex = array.findIndex(predicate);
+  return firstIndex === -1 ? [] : array.slice(firstIndex);
+}
+
 type QueryParams = { [param: string]: OneOrManyStrings };
 type OneOrManyStrings = string | string[];
 
@@ -80,15 +113,6 @@ export function objectWithoutProperty<T, K extends keyof T>(record: T, property:
   const clone = { ...record };
   delete clone[property];
   return clone;
-}
-
-/// Returns a copy of the record with the values of the two keys exchanged.
-export function recordWithSwappedValues<K extends string | number | symbol, V>(
-  record: Record<K, V>,
-  keyA: K,
-  keyB: K,
-): Record<K, V> {
-  return { ...record, [keyA]: record[keyB], [keyB]: record[keyA] };
 }
 
 /// Turns a snake_case identifier into a human-readable "Heading Case" label,
@@ -137,10 +161,33 @@ export function sum(array: number[]): number {
   return array.reduce((a, b) => a + b, 0);
 }
 
+/// The wait before the next attempt after `consecutiveFailureCount` (1 or more) failures in a row: the first delay,
+/// doubled with each further failure, up to the maximum.
+export function exponentialBackoffSeconds(
+  consecutiveFailureCount: number,
+  firstDelaySeconds: number,
+  maxDelaySeconds: number,
+): number {
+  return Math.min(firstDelaySeconds * 2 ** (consecutiveFailureCount - 1), maxDelaySeconds);
+}
+
 export function jsonWithRoundedNumbers(value: object, fractionDigits: number): string {
   return JSON.stringify(value, (_key, property) =>
     typeof property === "number" ? Number(property.toFixed(fractionDigits)) : property,
   );
+}
+
+/// The ISO 639 language a BCP 47 locale starts with ("de-DE" → "de"), or "und", BCP 47's code for an undetermined
+/// language, when the locale starts with none.
+export function languageOfLocale(locale: string): string {
+  const language = (locale.split("-")[0] ?? "").toLowerCase();
+  return /^[a-z]{2,3}$/.test(language) ? language : "und";
+}
+
+/// "YYYY-MM-DD" in the device's time zone. toISOString() gives the UTC date, which around midnight is another day.
+export function localIsoDate(date: Date): string {
+  const twoDigits = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`;
 }
 
 export function promiseWithResolvers<T>() {

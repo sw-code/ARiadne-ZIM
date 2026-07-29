@@ -1,16 +1,10 @@
 import { asc, eq, sql } from "drizzle-orm";
-import type {
-  AnnotatedPoi,
-  Annotation,
-  AnnotationInput,
-  AnnotationListItem,
-  IsoDate,
-  PlaceId,
-} from "../../shared/api.ts";
+import type { Annotation, AnnotationInput, AnnotationListItem, IsoDate, PlaceId, Poi } from "../../shared/api.ts";
 import { annotationStateOn } from "../../shared/annotationState.ts";
 import { groupedBy } from "../../shared/JavascriptExtensions.ts";
 import type { Database } from "../database/connection.ts";
 import { annotations, places } from "../database/schema.ts";
+import { categoryPreferringHealthcare } from "../places/placeRepository.ts";
 
 type AnnotationRow = typeof annotations.$inferSelect;
 
@@ -69,26 +63,44 @@ export async function deleteAnnotation(db: Database, id: string): Promise<boolea
   return deleted.length > 0;
 }
 
-// A place that has dropped out of OSM stays in the feed: its offer is still valid for the people who see it.
-export async function listAnnotatedPois(db: Database, today: IsoDate): Promise<AnnotatedPoi[]> {
-  const rows = await annotationsWithTheirPlaces(db).orderBy(asc(places.id), ...annotationOrder);
+// Every public ranking request reads every place, so the OSM tags, by far the largest column, are left out.
+const poiColumnsOfPlaces = {
+  id: places.id,
+  category: categoryPreferringHealthcare,
+  subtype: places.subtype,
+  name: places.name,
+  latitude: places.latitude,
+  longitude: places.longitude,
+  goneSince: places.goneSince,
+};
+
+// A place that has dropped out of OSM stays listed while it carries an active annotation: its offer is still valid
+// for the people who see it.
+export async function listPoisWithActiveAnnotations(db: Database, today: IsoDate): Promise<Poi[]> {
+  const rows = await db
+    .select({ place: poiColumnsOfPlaces, annotation: annotations })
+    .from(places)
+    .leftJoin(annotations, eq(annotations.placeId, places.id))
+    .orderBy(asc(places.id), ...annotationOrder);
   // The rule for "active" lives in annotationStateOn only; SQL merely loads the candidates.
-  const activeRows = rows.filter(({ annotation }) => annotationStateOn(annotation, today) === "active");
-  return [...groupedBy(activeRows, ({ place }) => place.id).values()].map((rowsOfPlace) => {
+  return [...groupedBy(rows, ({ place }) => place.id).values()].flatMap((rowsOfPlace) => {
     const [{ place }] = rowsOfPlace;
-    return {
-      id: place.id,
-      category: place.category,
-      subtype: place.subtype,
-      name: place.name,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      annotations: rowsOfPlace.map(({ annotation }) => ({
-        title: annotation.title,
-        text: annotation.text,
-        validFrom: annotation.validFrom,
-        validTo: annotation.validTo,
-      })),
-    };
+    const activeAnnotations = rowsOfPlace
+      .flatMap(({ annotation }) => (annotation === null ? [] : [annotation]))
+      .filter((annotation) => annotationStateOn(annotation, today) === "active")
+      .map(({ title, text, validFrom, validTo }) => ({ title, text, validFrom, validTo }));
+    const isGone = place.goneSince !== null;
+    if (isGone && activeAnnotations.length === 0) return [];
+    return [
+      {
+        id: place.id,
+        category: place.category,
+        subtype: place.subtype,
+        name: place.name,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        annotations: activeAnnotations,
+      },
+    ];
   });
 }

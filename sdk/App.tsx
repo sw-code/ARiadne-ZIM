@@ -22,6 +22,7 @@ export type ScreenParams = {
     targetCoordinate: GeoCoordinate;
     routeIntersections: GeoCoordinate[];
     pointsOfInterest: PointOfInterest[];
+    via: PointOfInterest | null; // the place the explore route leads through, if it detours at all
     navigationMode: NavigationMode;
     navigator: "dog" | "line";
   };

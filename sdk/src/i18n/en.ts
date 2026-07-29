@@ -40,12 +40,21 @@ export const en = {
   settings: {
     objectDetection: "Object detection",
     objectDetectionDescription: "Marks detected objects in AR, but lowers the frame rate. Applies when AR opens.",
+    personalisedPlaces: "Personalised places",
+    personalisedPlacesDescription:
+      "Sends the types of places you like and your rounded start and destination with each route request. Nothing is stored on the server.",
+    shareWalkStatistics: "Share walk statistics",
+    shareWalkStatisticsDescription:
+      "After each walk, sends statistics without any positions to improve suggestions for everyone. Off by default.",
     locationTypes: "Types of Locations",
-    locationTypesDescription:
-      "The app learns these priorities as you look at places. They don't change what the map and AR show yet.",
-    moveUp: "Up",
-    moveDown: "Down",
-    resetToDefaults: "Reset to defaults",
+    locationTypesDescription: "Learned from the places you look at and stop by. Choose More or Less to override.",
+    interestCounts: (shown: number, engaged: number) => `Seen ${shown} · looked at ${engaged}`,
+    interestChoices: { less: "Less", auto: "Auto", more: "More" },
+    resetProfile: "Reset profile",
+  },
+  placeCard: {
+    navigateHere: "Navigate here",
+    close: "Close",
   },
   safetyNotice: {
     payAttention: "Please pay attention to your surroundings!",

@@ -43,12 +43,22 @@ export const de: Translations = {
     objectDetection: "Objekterkennung",
     objectDetectionDescription:
       "Markiert erkannte Objekte in AR, senkt aber die Bildrate. Gilt ab dem nächsten Öffnen von AR.",
+    personalisedPlaces: "Persönliche Orte",
+    personalisedPlacesDescription:
+      "Sendet bei jeder Routenanfrage die Arten von Orten, die du magst, sowie deinen gerundeten Start und dein Ziel. Auf dem Server wird nichts gespeichert.",
+    shareWalkStatistics: "Statistiken zu Spaziergängen teilen",
+    shareWalkStatisticsDescription:
+      "Sendet nach jedem Spaziergang Statistiken ohne Positionen, um die Vorschläge für alle zu verbessern. Standardmäßig aus.",
     locationTypes: "Arten von Orten",
     locationTypesDescription:
-      "Die App lernt diese Prioritäten, während du dir Orte ansiehst. Auf Karte und AR wirken sie sich noch nicht aus.",
-    moveUp: "Hoch",
-    moveDown: "Runter",
-    resetToDefaults: "Auf Standard zurücksetzen",
+      "Gelernt aus den Orten, die du dir ansiehst und bei denen du stehen bleibst. Mit Mehr oder Weniger legst du es selbst fest.",
+    interestCounts: (shown: number, engaged: number) => `Gesehen ${shown} · angeschaut ${engaged}`,
+    interestChoices: { less: "Weniger", auto: "Auto", more: "Mehr" },
+    resetProfile: "Profil zurücksetzen",
+  },
+  placeCard: {
+    navigateHere: "Hierhin navigieren",
+    close: "Schließen",
   },
   safetyNotice: {
     payAttention: "Bitte achte auf deine Umgebung!",

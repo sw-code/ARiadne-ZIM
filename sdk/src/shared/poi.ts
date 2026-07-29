@@ -32,3 +32,13 @@ export type PointOfInterest = {
     position: Viro3DPoint;
   };
 };
+
+/// The place a route leads through stays in the list even while it is not among the nearest, so the user can see
+/// where the detour goes.
+export function withPinnedPointOfInterest(
+  nearest: PointOfInterest[],
+  pinned: PointOfInterest | null,
+): PointOfInterest[] {
+  if (pinned === null || nearest.some((poi) => poi.id === pinned.id)) return nearest;
+  return [...nearest, pinned];
+}

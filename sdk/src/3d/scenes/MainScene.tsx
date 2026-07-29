@@ -11,7 +11,14 @@ import { Stage } from "../components/overlay/Loading3dHint";
 import { computeTransform, identityTransform } from "../math3d";
 import { GeoCoordinate, geoCoordsFromGPS, useGeoLocation } from "@/src/shared/GeoLocation";
 import { useMagnetometer } from "../../shared/Magnetometer";
-import { currentAbsoluteTime, Listener, useIntervalAsync, useRenderRateLog } from "@/src/shared/ReactExtensions";
+import {
+  currentAbsoluteTime,
+  Listener,
+  useIntervalAsync,
+  useLatest,
+  useRefLazy,
+  useRenderRateLog,
+} from "@/src/shared/ReactExtensions";
 import { Navigation } from "../components/Navigation";
 import { useRouting } from "@/src/3d/routing";
 import { Stats } from "@/src/3d/components/overlay/Overlay";
@@ -22,13 +29,15 @@ import { useAnchorsState, ViroArSceneProps } from "@/src/shared/Viro";
 import { secondsToMillis } from "@/src/shared/math";
 import { enumerate, promiseWithResolvers } from "@/src/shared/JavascriptExtensions";
 import { getRoadsWithWidth } from "@/src/ui/pages/OverpassService";
-import { fetchAnnotatedPointsOfInterest } from "@/src/shared/AnnotatedPoiService";
 import { log } from "@/src/shared/Logger";
 import { PointOfInterest } from "@/src/shared/poi";
+import { LocationObjectCoords } from "expo-location";
 import { GEO_POSITIONING_UPDATE_INTERVAL } from "@/App";
 import type { NavigationMode } from "@/App";
 import { queuePermissionRequest } from "@/src/shared/permissions";
-import { useTranslations } from "@/src/i18n/Translations";
+import { useUserProfile } from "@/src/shared/UserProfileProvider";
+import { createWalkEncounters } from "@/src/3d/walkEncounters";
+import { useWalkRecording } from "@/src/3d/useWalkRecording";
 
 /// Passed into navigator
 type ArViewProps = {
@@ -39,8 +48,10 @@ type ArViewProps = {
   onVisionChanged: Listener<SceneVision>;
   routeIntersections: GeoCoordinate[];
   pois: PointOfInterest[];
+  via: PointOfInterest | null;
   navigationMode: NavigationMode;
   navigator: "line" | "dog";
+  onPlaceSelected: (poi: PointOfInterest, userLocation: LocationObjectCoords | null) => void;
 };
 
 /// Passed from navigator to scene
@@ -66,7 +77,9 @@ export const MainSceneNavigator = React.memo(function MainSceneNavigator(props: 
       onVisionChanged: props.onVisionChanged,
       navigationMode: props.navigationMode,
       navigator: props.navigator,
+      onPlaceSelected: props.onPlaceSelected,
       pois: props.pois,
+      via: props.via,
       routeIntersections: props.routeIntersections,
       targetCoordinate: props.targetCoordinate,
     }),
@@ -77,7 +90,9 @@ export const MainSceneNavigator = React.memo(function MainSceneNavigator(props: 
       props.onVisionChanged,
       props.navigationMode,
       props.navigator,
+      props.onPlaceSelected,
       props.pois,
+      props.via,
       props.routeIntersections,
       props.targetCoordinate,
     ],
@@ -103,13 +118,26 @@ function MainScene(viroProps: ViroArSceneProps<ArSceneProps>): React.JSX.Element
   const arSceneNavigator = viroProps.arSceneNavigator;
   const props = arSceneNavigator.viroAppProps;
 
-  const { onStageChanged, onVisionChanged, targetCoordinate } = props;
-  const t = useTranslations();
+  const { onStageChanged, onVisionChanged, onPlaceSelected, targetCoordinate, via } = props;
   const shouldShowPointsOfInterest = props.navigationMode === "explore";
+
+  // One per AR session. The profile changes with every count it records, so the encounters read it through a
+  // ref: recreating them on such a change would forget which places this walk already counted.
+  const profile = useUserProfile();
+  const profileRef = useLatest(profile);
+  const encounters = useRefLazy(() =>
+    createWalkEncounters({
+      recordShown: (poi) => profileRef.current.recordShown(poi),
+      recordEngaged: (poi) => profileRef.current.recordEngaged(poi),
+    }),
+  ).current;
 
   const [isTracking, setTracking] = useState(false);
   const isTrackingRef = useRef(isTracking);
-  const [pointsOfInterest, setPointsOfInterest] = useState(() => (shouldShowPointsOfInterest ? props.pois : []));
+  const pointsOfInterest = useMemo(
+    () => (shouldShowPointsOfInterest ? props.pois : []),
+    [shouldShowPointsOfInterest, props.pois],
+  );
   const [sceneVision, setSceneVision] = useState<SceneVision>(null);
 
   const [currentTime, setTime] = useState(currentAbsoluteTime());
@@ -123,10 +151,25 @@ function MainScene(viroProps: ViroArSceneProps<ArSceneProps>): React.JSX.Element
     true,
   );
 
+  // Read through a ref, so the handler handed to the places stays the same while the GPS fix changes.
+  const deviceGeoLocationRef = useLatest(deviceGeoLocation);
+  const handlePlaceSelected = useCallback(
+    (poi: PointOfInterest) => onPlaceSelected(poi, deviceGeoLocationRef.current),
+    [onPlaceSelected, deviceGeoLocationRef],
+  );
+
   const [magnetometer, hasCompassPermission] = useMagnetometer(true, GEO_POSITIONING_UPDATE_INTERVAL.seconds);
 
+  useWalkRecording({
+    location: deviceGeoLocation,
+    isArTracking: isTracking,
+    pois: pointsOfInterest,
+    encounters,
+    navigationMode: props.navigationMode,
+  });
+
   const userCoords = deviceGeoLocation && geoCoordsFromGPS(deviceGeoLocation);
-  const routing = useRouting(userCoords, targetCoordinate);
+  const routing = useRouting(userCoords, targetCoordinate, via?.location.coordinate ?? null);
 
   const handleVisionChanged = useCallback(
     (nextVision: SceneVision) => {
@@ -137,35 +180,6 @@ function MainScene(viroProps: ViroArSceneProps<ArSceneProps>): React.JSX.Element
   );
 
   useSemanticDangerRecognition(arSceneNavigator, handleVisionChanged);
-
-  const hasRequestedPointsOfInterest = useRef(false);
-  useEffect(() => {
-    let isMounted = true;
-
-    if (!shouldShowPointsOfInterest || hasRequestedPointsOfInterest.current) {
-      return;
-    }
-
-    hasRequestedPointsOfInterest.current = true;
-    log.info("AR MAIN | Fetching annotated points of interest");
-
-    fetchAnnotatedPointsOfInterest(t.poiSubtypes)
-      .then((pois) => {
-        if (!isMounted) return;
-
-        log.info("AR MAIN | Points of interest fetched successfully", {
-          pointOfInterestCount: pois.length,
-        });
-        setPointsOfInterest(pois);
-      })
-      .catch((error) => {
-        log.error("CMS | Querying for annotated points of interest in AR failed", error);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [shouldShowPointsOfInterest, t.poiSubtypes]);
 
   const currentStage: Stage = (() => {
     if (!isTracking) return "not-tracking";
@@ -244,8 +258,9 @@ function MainScene(viroProps: ViroArSceneProps<ArSceneProps>): React.JSX.Element
       sceneNavigator: arSceneNavigator,
       vision: sceneVision,
       pois: pointsOfInterest,
+      via,
     }),
-    [anchors, currentTime, arSceneNavigator, sceneVision, pointsOfInterest],
+    [anchors, currentTime, arSceneNavigator, sceneVision, pointsOfInterest, via],
   );
 
   const navigation = isTracking && device && (
@@ -257,6 +272,8 @@ function MainScene(viroProps: ViroArSceneProps<ArSceneProps>): React.JSX.Element
       onStatsChanged={props.onStatsChanged}
       onDangerStatusChanged={props.onDangerStatusChanged}
       navigator={props.navigator}
+      encounters={encounters}
+      onPlaceSelected={handlePlaceSelected}
     />
   );
 

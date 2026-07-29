@@ -8,6 +8,20 @@
       "when": 1792576702680,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792696047016,
+      "tag": "0001_walk_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792702418780,
+      "tag": "0002_walk_reports_received_on",
+      "breakpoints": true
     }
   ]
 }

@@ -409,6 +409,11 @@ export function angleBetweenSegmentsIsAcute(a: Segment, b: Segment): boolean {
   return angleIsAcute(aDir, bDir);
 }
 
+/// The vectors need not be normalized. A zero vector has no direction and counts as perpendicular to everything.
+export function angleBetweenDegrees(a: Vector3, b: Vector3): number {
+  return radiansToDegrees(a.angle(b));
+}
+
 // Computes whether the angle between the two vectors is "sharp" (less than 90 degrees).
 export function angleIsAcute(a: Vector3, b: Vector3): boolean {
   return a.dot(b) > 0;

@@ -7,6 +7,7 @@ export const AppColors = {
   ButtonPrimaryBackground: "#201E2BFF",
   DefaultForeground: "#000000FF",
   DefaultBackground: "#FFFFFFFF",
+  MutedForeground: "#7A7A85FF",
   ErrorForeground: "#B80000",
   ErrorBackground: "#FEF1F1",
   SuccessForeground: "#05B35C",

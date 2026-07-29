@@ -2,8 +2,12 @@ import { GeoCoordinate } from "./GeoLocation";
 import { getJsonOrThrow, createUrl } from "@/src/shared/JavascriptExtensions";
 import { getGraphhopperApiKey } from "@/src/shared/Env";
 
-export async function getRoute(start: GeoCoordinate, destination: GeoCoordinate): Promise<Route> {
-  const response = await fetch(buildDirectionsUrl(start, destination), {
+export async function getRoute(
+  start: GeoCoordinate,
+  destination: GeoCoordinate,
+  via: GeoCoordinate[] = [],
+): Promise<Route> {
+  const response = await fetch(buildDirectionsUrl(start, destination, via), {
     // TODO signal: abortController.current.signal,
     headers: { "User-Agent": "@sw-code/ariadne-sdk" },
   });
@@ -11,13 +15,13 @@ export async function getRoute(start: GeoCoordinate, destination: GeoCoordinate)
   return (await getJsonOrThrow(response)) as Route;
 }
 
-function buildDirectionsUrl(start: GeoCoordinate, destination: GeoCoordinate) {
+function buildDirectionsUrl(start: GeoCoordinate, destination: GeoCoordinate, via: GeoCoordinate[]) {
   return createUrl("https://graphhopper.com/api/1/route", {
     key: getGraphhopperApiKey(),
-    point: [
-      `${start.latitudeDegrees},${start.longitudeDegrees}`,
-      `${destination.latitudeDegrees},${destination.longitudeDegrees}`,
-    ],
+    // GraphHopper visits the points in the order given, so the via points must sit between start and destination.
+    point: [start, ...via, destination].map(
+      ({ latitudeDegrees, longitudeDegrees }) => `${latitudeDegrees},${longitudeDegrees}`,
+    ),
     profile: "foot",
     locale: "en",
     elevation: "true",

@@ -211,6 +211,7 @@ export const Testing = ({ navigation }: Props) => {
         pointsOfInterest: pointOfInterests[sceneType],
         targetCoordinate: navigationTargetSoest,
         routeIntersections: [],
+        via: null,
         navigationMode: "explore",
         navigator: "line",
       });

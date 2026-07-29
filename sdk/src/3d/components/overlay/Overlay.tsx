@@ -97,6 +97,7 @@ export function ArOverlay({ overlayStage, onBack, stats, danger, detectedObjects
     <>
       {useDebugOverlays && (
         <View
+          pointerEvents="box-none"
           style={{
             ...layout.fullSize,
             ...insets,
@@ -170,6 +171,8 @@ export function ArOverlay({ overlayStage, onBack, stats, danger, detectedObjects
     </>
   );
 
+  // The full-size wrappers below are box-none because a plain View takes every touch in its area, so the AR view
+  // underneath would never see a tap on a place.
   return (
     <>
       <View pointerEvents="box-none" style={{ ...layout.fullSize }}>
@@ -177,6 +180,7 @@ export function ArOverlay({ overlayStage, onBack, stats, danger, detectedObjects
         {debugStats}
 
         <View
+          pointerEvents="box-none"
           style={{
             ...layout.fullSize,
             ...insets,
@@ -187,6 +191,7 @@ export function ArOverlay({ overlayStage, onBack, stats, danger, detectedObjects
         </View>
 
         <View
+          pointerEvents="box-none"
           style={{
             ...layout.fullSize,
             ...insets,

@@ -1,5 +1,5 @@
 import { runningMedianDegrees, runningMedianVector3, smoothDegrees, smoothNumber, smoothVector3 } from "../3d/math3d";
-import { Dispatch, MutableRefObject, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { Dispatch, MutableRefObject, RefObject, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { millisToSeconds } from "./math";
 import { useInterval } from "react-timing-hooks";
 import { useDebouncedCallback } from "use-debounce";
@@ -12,6 +12,13 @@ export function useRefLazy<T>(constructor: () => T): MutableRefObject<T> {
   if (valueOrNull.current === undefined) valueOrNull.current = constructor();
   if (valueOrNull.current === undefined) throw new Error("Ref constructor returned undefined.");
   return valueOrNull as MutableRefObject<T>;
+}
+
+/// The value of the latest render, for callbacks and effect cleanups that outlive the render they were created in.
+export function useLatest<T>(value: T): Readonly<RefObject<T>> {
+  const latest = useRef(value);
+  latest.current = value;
+  return latest;
 }
 
 export type Listener<T> = (val: T) => void;

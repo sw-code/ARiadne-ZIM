@@ -4,6 +4,7 @@ import type { PlaceId, PlaceSummary } from "../../shared/api.ts";
 import { chunked } from "../../shared/JavascriptExtensions.ts";
 import type { Database } from "../database/connection.ts";
 import { places } from "../database/schema.ts";
+import { sensitiveCategory } from "../profile/sensitiveSubtypes.ts";
 
 export type ImportedPlace = {
   id: PlaceId;
@@ -14,6 +15,13 @@ export type ImportedPlace = {
   longitude: number;
   tags: Record<string, string>;
 };
+
+// The import files a node under the first of `placeCategoryKeys` it carries, and healthcare is the last of them, so a
+// node tagged office=therapist and healthcare=psychotherapist is filed under office. Wherever the category decides
+// what is sensitive, a healthcare tag next to another key still makes the place a health place. Computed in SQL, so
+// that the tags need not be loaded.
+export const categoryPreferringHealthcare = sql<string>`
+  case when ${places.tags} ? ${sensitiveCategory} then ${sensitiveCategory} else ${places.category} end`;
 
 // The value the row would have had if it had been inserted, for use in `on conflict do update`.
 const valueFromInsert = (column: PgColumn) => sql`excluded.${sql.identifier(column.name)}`;

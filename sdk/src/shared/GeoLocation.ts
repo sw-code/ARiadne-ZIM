@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
 import { LocationAccuracy, LocationObjectCoords, LocationPermissionResponse } from "expo-location";
-import { secondsToMillis } from "@/src/shared/math";
+import { degreesToRadians, secondsToMillis } from "@/src/shared/math";
 import { useEffect, useMemo, useState } from "react";
 import { Listener } from "./ReactExtensions";
 import { nullToUndefined } from "@/src/shared/JavascriptExtensions";
@@ -32,6 +32,23 @@ export function geoCoordsFromLatLongDegrees(
     longitudeDegrees,
     altitudeMetersFromEllipsoid: altitudeMetersFromEllipsoid,
   };
+}
+
+const earthMeanRadiusMetres = 6_371_000;
+
+/// Great-circle distance (haversine). Ignores altitude, and is off by up to 0.5 % because the Earth is not a sphere,
+/// which is plenty for deciding whether a place is within walking distance.
+export function distanceMetres(a: GeoCoordinate, b: GeoCoordinate): number {
+  const latitudeDeltaRadians = degreesToRadians(b.latitudeDegrees - a.latitudeDegrees);
+  const longitudeDeltaRadians = degreesToRadians(b.longitudeDegrees - a.longitudeDegrees);
+
+  const haversine =
+    Math.sin(latitudeDeltaRadians / 2) ** 2 +
+    Math.cos(degreesToRadians(a.latitudeDegrees)) *
+      Math.cos(degreesToRadians(b.latitudeDegrees)) *
+      Math.sin(longitudeDeltaRadians / 2) ** 2;
+
+  return 2 * earthMeanRadiusMetres * Math.asin(Math.sqrt(haversine));
 }
 
 /// Users can grant approximate location only, which is too inaccurate for navigation.

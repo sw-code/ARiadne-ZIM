@@ -45,6 +45,15 @@ test("nodes without tags or without a category key are dropped", () => {
   expect(mapOverpassResponseToPlaces(response)).toEqual([]);
 });
 
+test("an Overpass response with a Stolperstein node imports without it", () => {
+  const stolperstein = nodeAt(1, { historic: "memorial", memorial: "stolperstein", name: "Hier wohnte …" });
+  const warMemorial = nodeAt(2, { historic: "memorial", memorial: "war_memorial" });
+
+  expect(mapOverpassResponseToPlaces({ elements: [stolperstein, warMemorial] })).toEqual([
+    expect.objectContaining({ id: "node-2" }),
+  ]);
+});
+
 test("a node without a name gets a null name", () => {
   const response: OverpassResponse = { elements: [nodeAt(1, { amenity: "bench" })] };
 

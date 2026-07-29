@@ -45,7 +45,7 @@ export function mapOverpassResponseToPlaces(response: OverpassResponse): Importe
 function mapNodeToPlaces(node: OverpassNode): ImportedPlace[] {
   const tags = node.tags ?? {};
   const category = inferCategory(tags);
-  if (category === null) return [];
+  if (category === null || isStolperstein(tags)) return [];
 
   return [
     {
@@ -58,6 +58,13 @@ function mapNodeToPlaces(node: OverpassNode): ImportedPlace[] {
       tags,
     },
   ];
+}
+
+// Stolpersteine are small plaques set into the pavement, not places one looks at from a distance, yet they made up 35 of
+// the 77 "memorial" places in Soest. Ones imported before count as gone on the next import, and gone places are only
+// served while annotated.
+function isStolperstein(tags: Record<string, string>): boolean {
+  return tags["memorial"] === "stolperstein";
 }
 
 function inferCategory(tags: Record<string, string>): { key: string; value: string } | null {

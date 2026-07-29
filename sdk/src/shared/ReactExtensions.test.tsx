@@ -12,6 +12,7 @@ import {
   isWithinPointGranularity,
   usePointGranularity,
   usePersistentState,
+  useLatest,
 } from "@/src/shared/ReactExtensions";
 import { Vector3 } from "@math.gl/core";
 import { useRef } from "react";
@@ -609,5 +610,19 @@ describe("usePersistentState", () => {
     unmount(); // cleanup must flush the pending write rather than drop it
 
     expect(setItem).toHaveBeenCalledWith("flush.key", JSON.stringify("latest"));
+  });
+});
+
+describe("useLatest", () => {
+  test("is one ref holding the value of the latest render", () => {
+    const { result, rerender } = renderHook(({ value }: { value: string }) => useLatest(value), {
+      initialProps: { value: "first" },
+    });
+    const firstRef = result.current;
+
+    rerender({ value: "second" });
+
+    expect(result.current).toBe(firstRef);
+    expect(firstRef.current).toBe("second");
   });
 });

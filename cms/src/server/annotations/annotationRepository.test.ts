@@ -8,8 +8,8 @@ import { useTestDatabase } from "../testing/testDatabase.ts";
 import {
   createAnnotation,
   deleteAnnotation,
-  listAnnotatedPois,
   listAnnotations,
+  listPoisWithActiveAnnotations,
   placeExists,
   updateAnnotation,
 } from "./annotationRepository.ts";
@@ -136,13 +136,23 @@ test("a place exists once it has been imported", async () => {
   expect(await placeExists(db(), "node-404")).toBe(false);
 });
 
-test("the app feed holds only the annotations active today", async () => {
+test("places without annotations are listed with an empty list", async () => {
+  await upsertPlaces(db(), [cafe, unnamedFastFood], importedAt);
+  await createAnnotation(db(), annotationOn("node-2"));
+
+  expect(await listPoisWithActiveAnnotations(db(), today)).toEqual([
+    expect.objectContaining({ id: "node-1", annotations: [] }),
+    expect.objectContaining({ id: "node-2", annotations: [expect.objectContaining({ title: "Kaffee und Kuchen" })] }),
+  ]);
+});
+
+test("a place is listed once with its coordinates and the annotations active today in start-date order", async () => {
   await upsertPlaces(db(), [cafe], importedAt);
-  await createAnnotation(db(), annotationOn("node-1", { title: "aktiv" }));
-  await createAnnotation(db(), annotationOn("node-1", { title: "abgelaufen", validTo: "2026-10-20" }));
+  await createAnnotation(db(), annotationOn("node-1", { title: "B" }));
+  await createAnnotation(db(), annotationOn("node-1", { title: "A", validFrom: "2026-10-21", validTo: "2026-10-21" }));
   await createAnnotation(db(), annotationOn("node-1", { title: "geplant", validFrom: "2026-10-22" }));
 
-  expect(await listAnnotatedPois(db(), today)).toEqual([
+  expect(await listPoisWithActiveAnnotations(db(), today)).toEqual([
     {
       id: "node-1",
       category: "amenity",
@@ -150,51 +160,68 @@ test("the app feed holds only the annotations active today", async () => {
       name: "Café am Markt",
       latitude: 51.5711,
       longitude: 8.106,
-      annotations: [{ title: "aktiv", text: "Zwei Stück Kuchen zum Preis von einem.", validFrom: null, validTo: null }],
+      annotations: [
+        { title: "B", text: "Zwei Stück Kuchen zum Preis von einem.", validFrom: null, validTo: null },
+        { title: "A", text: "Zwei Stück Kuchen zum Preis von einem.", validFrom: "2026-10-21", validTo: "2026-10-21" },
+      ],
     },
   ]);
 });
 
-test("the app feed has one entry per place, however many annotations are active", async () => {
+test("expired annotations are not attached", async () => {
   await upsertPlaces(db(), [cafe], importedAt);
-  await createAnnotation(db(), annotationOn("node-1", { title: "B" }));
-  await createAnnotation(db(), annotationOn("node-1", { title: "A" }));
+  await createAnnotation(db(), annotationOn("node-1", { title: "aktiv" }));
+  await createAnnotation(db(), annotationOn("node-1", { title: "abgelaufen", validTo: "2026-10-20" }));
 
-  const feed = await listAnnotatedPois(db(), today);
+  const [listed] = await listPoisWithActiveAnnotations(db(), today);
 
-  expect(feed).toHaveLength(1);
-  expect(feed[0]?.annotations.map(({ title }) => title)).toEqual(["A", "B"]);
+  expect(listed?.annotations.map(({ title }) => title)).toEqual(["aktiv"]);
 });
 
-test("the app feed is ordered by place id", async () => {
+test("places are ordered by id", async () => {
   await upsertPlaces(db(), [unnamedFastFood, cafe], importedAt);
-  await createAnnotation(db(), annotationOn("node-2"));
-  await createAnnotation(db(), annotationOn("node-1"));
 
-  expect((await listAnnotatedPois(db(), today)).map(({ id }) => id)).toEqual(["node-1", "node-2"]);
+  expect((await listPoisWithActiveAnnotations(db(), today)).map(({ id }) => id)).toEqual(["node-1", "node-2"]);
 });
 
-test("a place without annotations is absent from the app feed", async () => {
-  await upsertPlaces(db(), [cafe, unnamedFastFood], importedAt);
-  await createAnnotation(db(), annotationOn("node-2"));
+test("gone places are listed only while they carry an active annotation", async () => {
+  const laterImportAt = new Date("2026-10-02T00:00:00Z");
+  const goneWithOffer = { ...cafe, id: "node-3" };
+  const goneWithExpiredOffer = { ...cafe, id: "node-4" };
+  const goneWithoutOffer = { ...cafe, id: "node-5" };
+  await upsertPlaces(db(), [unnamedFastFood, goneWithOffer, goneWithExpiredOffer, goneWithoutOffer], importedAt);
+  await createAnnotation(db(), annotationOn("node-3"));
+  await createAnnotation(db(), annotationOn("node-4", { validTo: "2026-10-20" }));
+  await upsertPlaces(db(), [unnamedFastFood], laterImportAt);
+  await markPlacesUnseenSinceAsGone(db(), laterImportAt);
 
-  expect((await listAnnotatedPois(db(), today)).map(({ id }) => id)).toEqual(["node-2"]);
+  const listed = await listPoisWithActiveAnnotations(db(), today);
+
+  expect(listed.map(({ id }) => id)).toEqual(["node-2", "node-3"]);
 });
 
-test("a place whose annotations are all inactive is absent from the app feed", async () => {
-  await upsertPlaces(db(), [cafe], importedAt);
-  await createAnnotation(db(), annotationOn("node-1", { validTo: "2026-10-20" }));
+// The import takes the category from the first key it knows, and healthcare comes last.
+test("a place that also carries a healthcare tag is listed in the healthcare category", async () => {
+  const therapist: ImportedPlace = {
+    ...cafe,
+    id: "node-6",
+    category: "office",
+    subtype: "therapist",
+    tags: { office: "therapist", healthcare: "psychotherapist" },
+  };
+  await upsertPlaces(db(), [therapist], importedAt);
 
-  expect(await listAnnotatedPois(db(), today)).toEqual([]);
+  expect(await listPoisWithActiveAnnotations(db(), today)).toEqual([
+    expect.objectContaining({ id: "node-6", category: "healthcare", subtype: "therapist" }),
+  ]);
 });
 
-test("an annotation on a place that has left OSM is still served to the app and listed as gone", async () => {
+test("an annotation on a place that has left OSM is listed to editors as gone", async () => {
   const laterImportAt = new Date("2026-10-02T00:00:00Z");
   await upsertPlaces(db(), [cafe, unnamedFastFood], importedAt);
   await createAnnotation(db(), annotationOn("node-1"));
   await upsertPlaces(db(), [unnamedFastFood], laterImportAt);
   await markPlacesUnseenSinceAsGone(db(), laterImportAt);
 
-  expect(await listAnnotatedPois(db(), today)).toEqual([expect.objectContaining({ id: "node-1" })]);
   expect(await listAnnotations(db())).toEqual([expect.objectContaining({ placeId: "node-1", placeGone: true })]);
 });
