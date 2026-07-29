@@ -1,0 +1,206 @@
+:root {
+  --border: #d4d4d8;
+  --muted: #666;
+  --accent: #2563eb;
+  --danger: #b91c1c;
+  font-family: system-ui, sans-serif;
+  color: #18181b;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+button.danger {
+  margin-left: auto;
+  color: var(--danger);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  text-align: left;
+}
+
+.app-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tabs button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+tbody tr {
+  cursor: pointer;
+}
+
+tbody tr:hover {
+  background: #f4f4f5;
+}
+
+.empty {
+  color: var(--muted);
+}
+
+.badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.6rem;
+  background: #fef3c7;
+  font-size: 0.8rem;
+}
+
+.error-messages {
+  padding-left: 1.2rem;
+  color: var(--danger);
+}
+
+.annotation-form {
+  display: grid;
+  max-width: 36rem;
+  gap: 1rem;
+}
+
+.field,
+.field label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field-label {
+  font-weight: 600;
+}
+
+.field input,
+.field textarea {
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+}
+
+.field small {
+  color: var(--muted);
+}
+
+.place-picker {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) 2fr;
+  align-items: start;
+  gap: 1rem;
+}
+
+.place-picker h2 {
+  margin-top: 0;
+}
+
+.place-picker + .actions {
+  margin-top: 1rem;
+}
+
+.place-picker input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem;
+}
+
+.place-list {
+  max-height: 28rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.place-list button {
+  display: grid;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  text-align: left;
+}
+
+.place-list button[aria-current="true"] {
+  background: #fef3c7;
+}
+
+.place-list small {
+  color: var(--muted);
+}
+
+/* The height must not depend on the length of the list next to the map: the map fits its view to the size it has. */
+.place-map {
+  height: 28rem;
+}

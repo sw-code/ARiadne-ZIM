@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ariadne-cms.fullname" . }}
+  labels:
+    {{- include "ariadne-cms.labels" . | nindent 4 }}
+spec:
+  # One pod, never two, not even for the seconds of a rolling update. The place
+  # import only shares a run within one process, and every start also migrates
+  # the schema, so a second pod would interleave its import and migration with
+  # the first one's.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ariadne-cms.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ariadne-cms.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          env:
+            {{- if .Values.database.existingSecret }}
+            # Compose DATABASE_URL at pod start from the operator-managed credentials.
+            # DB_USER/DB_PASS must precede DATABASE_URL for $(VAR) expansion to resolve.
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.loginKey }}
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.passwordKey }}
+            # No sslmode: node-postgres would let it override the verify-ca setup from DATABASE_CA_PATH.
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USER):$(DB_PASS)@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}"
+            {{- end }}
+            {{- if .Values.pgCaConfigMap }}
+            - name: DATABASE_CA_PATH
+              value: /etc/pg-ca/ca.pem
+            {{- end }}
+            {{- if .Values.editor.existingSecret }}
+            - name: EDITOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.editor.existingSecret }}
+                  key: {{ .Values.editor.passwordKey }}
+            {{- end }}
+          {{- if .Values.pgCaConfigMap }}
+          volumeMounts:
+            - name: pg-ca
+              mountPath: /etc/pg-ca
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.pgCaConfigMap }}
+      volumes:
+        - name: pg-ca
+          configMap:
+            name: {{ .Values.pgCaConfigMap }}
+      {{- end }}

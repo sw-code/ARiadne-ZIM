@@ -1,0 +1,63 @@
+name: Android App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['sdk/**', '.github/workflows/android.yml']
+  pull_request:
+    branches: [main]
+    paths: ['sdk/**', '.github/workflows/android.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk
+    steps:
+      # The release build needs more disk space than the runner image leaves free.
+      - name: Free disk space
+        working-directory: /
+        run: sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/package-lock.json
+
+      # The build only needs the variables to be set; a working app needs real keys (see sdk/README.md).
+      - name: Create .env file
+        run: |
+          echo "EXPO_PUBLIC_API_MAPTILER_KEY=ci-stub-key" >> .env
+          echo "EXPO_PUBLIC_API_GRAPHHOPPER_KEY=ci-stub-key" >> .env
+          echo "GEOSPATIAL_ARCORE_KEY=ci-stub-key" >> .env
+          echo "EXPO_PUBLIC_CMS_BASE_URL=http://localhost:8080" >> .env
+
+      - run: npm ci
+
+      - name: Generate native projects
+        run: npm run build
+
+      # after the native projects exist, so the Gradle cache key covers the generated build files
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK components
+        run: sdkmanager "ndk;27.1.12297006" "build-tools;36.0.0" "platforms;android-36" "cmake;3.22.1"
+
+      # A release build bundles the JavaScript, so it also catches bundling errors. It is signed with the debug key.
+      - name: Build release APK
+        working-directory: sdk/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon

@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/sw-code/ariadne/ariadne-cms
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+database:
+  # Existing Secret holding the credentials (the movetokube operator secret
+  # "database-ariadne-cms"). DATABASE_URL is composed at pod start from the
+  # login/password plus the host/port/name below.
+  existingSecret: ""
+  loginKey: LOGIN
+  passwordKey: PASSWORD
+  host: ""
+  port: 5432
+  name: ariadne_cms
+
+# ConfigMap with the database CA under the key ca.pem. Leave empty for a database without TLS.
+pgCaConfigMap: ""
+
+editor:
+  existingSecret: ""
+  passwordKey: EDITOR_PASSWORD
+
+service:
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  tls:
+    secretName: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  # The image's "node" user. Pinned numerically so the kubelet can verify non-root
+  # (USER "node" is a name, which runAsNonRoot cannot validate).
+  runAsUser: 1000
+  runAsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+resources: {}

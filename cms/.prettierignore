@@ -1,0 +1,4 @@
+dist
+drizzle
+# Helm templates are Go templates, not YAML.
+chart/templates

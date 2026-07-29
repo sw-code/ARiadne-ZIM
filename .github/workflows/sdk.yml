@@ -1,0 +1,44 @@
+name: SDK
+
+on:
+  push:
+    branches: [main]
+    paths: ['sdk/**', '.github/workflows/sdk.yml']
+  pull_request:
+    branches: [main]
+    paths: ['sdk/**', '.github/workflows/sdk.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdk/package-lock.json
+      # The checks only need the variables to be set; a working app needs real keys (see sdk/README.md).
+      - name: Create .env file
+        run: |
+          echo "EXPO_PUBLIC_API_MAPTILER_KEY=ci-stub-key" >> .env
+          echo "EXPO_PUBLIC_API_GRAPHHOPPER_KEY=ci-stub-key" >> .env
+          echo "GEOSPATIAL_ARCORE_KEY=ci-stub-key" >> .env
+          echo "EXPO_PUBLIC_CMS_BASE_URL=http://localhost:8080" >> .env
+      - run: npm ci
+      - name: Type Check
+        run: npm run type-check
+      - name: Lint Check
+        run: npm run lint
+      - name: Format Check
+        run: npm run format:check
+      - name: Test
+        run: npm run test
+      - name: Build
+        run: npm run build

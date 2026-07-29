@@ -1,0 +1,52 @@
+name: CMS
+
+on:
+  push:
+    branches: [main]
+    paths: ['cms/**', '.github/workflows/cms.yml']
+  pull_request:
+    branches: [main]
+    paths: ['cms/**', '.github/workflows/cms.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cms
+    # Matches the default of CMS_TEST_DATABASE_URL, so the tests need no extra configuration.
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_DB: ariadne_cms_test
+          POSTGRES_USER: cms
+          POSTGRES_PASSWORD: cms
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U cms -d ariadne_cms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: cms/package-lock.json
+      - run: npm ci
+      - name: Type Check
+        run: npm run type-check
+      - name: Lint Check
+        run: npm run lint
+      - name: Format Check
+        run: npm run format:check
+      - name: Test
+        run: npm run test
+      - name: Build
+        run: npm run build

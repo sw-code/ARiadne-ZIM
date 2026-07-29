@@ -1,0 +1,16 @@
+export const AppColors = {
+  GlassForeground: "#FFFFFFFF",
+  GlassBackground: "#28234273",
+  ButtonSecondaryForeground: "#000000FF",
+  ButtonSecondaryBackground: "#ECECEFFF",
+  ButtonPrimaryForeground: "#FFFFFFFF",
+  ButtonPrimaryBackground: "#201E2BFF",
+  DefaultForeground: "#000000FF",
+  DefaultBackground: "#FFFFFFFF",
+  ErrorForeground: "#B80000",
+  ErrorBackground: "#FEF1F1",
+  SuccessForeground: "#05B35C",
+  OverlayErrorForeground: "#e30000",
+  OverlayErrorBackdrop: "rgba(96,0,0,0.57)",
+  OverlayErrorBackground: "rgb(96,0,0)",
+};
